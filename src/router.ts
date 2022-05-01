@@ -114,11 +114,18 @@ export const appRouter = createRouter()
           }
         }
 
+        if (meta?.auth.verifyIP && ctx.ip !== ctx.token?.client_ip) authorized = false;
+
         if (!authorized) {
           throw new TRPCError({ code: "UNAUTHORIZED" });
         } else {
           return next();
         }
+      })
+      .query("username", {
+        resolve: async ({ ctx }) => {
+          return ctx.user?.username;
+        },
       })
       .query("flags", {
         resolve: async ({ ctx }) => {

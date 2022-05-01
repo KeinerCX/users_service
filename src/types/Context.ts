@@ -51,9 +51,9 @@ export async function createContext(opts?: trpcNext.CreateNextContextOptions) {
   const user = await getUserFromHeader();
 
   return {
-    user: user,
-    ip: ip,
-    token: token,
+    user,
+    ip,
+    token,
   };
 }
 
