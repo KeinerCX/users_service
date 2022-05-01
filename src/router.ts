@@ -1,7 +1,7 @@
 import * as trpc from "@trpc/server";
 import { Snowflake } from "nodejs-snowflake";
 import validator from "validator";
-import { z } from "zod";
+import { string, z } from "zod";
 import { PasswordRegex, UsernameRegex } from "./utility/regex";
 import { Context, createRouter } from "./types/Context";
 import Util from "./utility/services";
@@ -10,17 +10,16 @@ import { Meta } from "./types/interfaces/Meta";
 import { TRPCClientError } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import { ContentTypeParserDoneFunction } from "fastify/types/content-type-parser";
-import { prisma } from "./utility/prisma";
-import { Flag } from "./types/Flags";
+import { Flag, Flags } from "./types/Flags";
 import { createContext } from "vm";
 import { PrismaClientValidationError } from "@prisma/client/runtime";
 import { Prisma } from "@prisma/client";
 
+// Prisma Client
+import { prisma } from "./utility/prisma";
+
 export const appRouter = createRouter()
   .mutation("register", {
-    meta: {
-      auth: { userFlags: ["admin"] },
-    },
     input: z.object({
       username: z.string().min(3).max(20),
       password: z.string().min(8).max(1000),
@@ -101,14 +100,14 @@ export const appRouter = createRouter()
   .merge(
     "user.",
     createRouter()
+
+
       .middleware(async ({ path, type, next, meta, ctx }) => {
         let authorized = true;
 
         if (meta?.auth.userFlags) {
-          if (ctx.token) {
-            for (const flag of meta?.auth.userFlags) {
-              if (ctx.token.flags.includes(flag)) authorized = false;
-            }
+          if (ctx.user) {
+            for (const flag of meta?.auth.userFlags) if (!ctx.user.flags.includes(flag)) authorized = false;
           } else {
             authorized = false;
           }
@@ -116,20 +115,43 @@ export const appRouter = createRouter()
 
         if (meta?.auth.verifyIP && ctx.ip !== ctx.token?.client_ip) authorized = false;
 
-        if (!authorized) {
-          throw new TRPCError({ code: "UNAUTHORIZED" });
-        } else {
-          return next();
-        }
+        if (!authorized) throw new TRPCError({ code: "UNAUTHORIZED" });
+        return next();
       })
+
+      // Username
       .query("username", {
         resolve: async ({ ctx }) => {
           return ctx.user?.username;
         },
       })
+
+      // Flags
       .query("flags", {
         resolve: async ({ ctx }) => {
           return ctx.user?.flags;
+        },
+      })
+      .mutation("addFlags", {
+        meta: { auth: { userFlags: ["admin"] } },
+        input: z.object({ flags: z.array( z.string() ) }),
+        resolve: async ({ ctx, input }) => {
+          return await prisma.user.update({ 
+            where: { id: ctx.user?.id },
+            data: { flags: { push: input.flags.filter(f => Flags.includes(f)) } }
+          });
+        },
+      })
+      .mutation("removeFlags", {
+        meta: { auth: { userFlags: ["admin"] } },
+        input: z.object({ flags: z.array( z.string() ) }),
+        resolve: async ({ ctx, input }) => {
+          return await prisma.user.update({ 
+            where: { id: ctx.user?.id },
+            data: { flags: { 
+              set: ctx.user?.flags.filter(f => !(input.flags.includes(f))) 
+            }}
+          });
         },
       })
   );

@@ -28,6 +28,7 @@ model User {
   posts       String[]
   joined      DateTime  @default(now())
   sessions    Session[]
+
   @@map("users")
 }
 
