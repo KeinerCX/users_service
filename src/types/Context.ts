@@ -19,6 +19,7 @@ import { Meta } from "./interfaces/Meta";
 
 // The app's context - is generated for each incoming request
 export async function createContext(opts?: trpcNext.CreateNextContextOptions) {
+  //@ts-ignore
   const ip = requestIp.getClientIp(opts?.req);
 
   if (!opts?.req.headers.authorization)

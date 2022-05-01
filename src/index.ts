@@ -7,6 +7,7 @@ const server = fastify({
   maxParamLength: 5000,
 });
 
+//@ts-ignore
 server.register(fastifyTRPCPlugin, {
   prefix: "/",
   trpcOptions: { router: appRouter, createContext },
