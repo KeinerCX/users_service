@@ -100,8 +100,6 @@ export const appRouter = createRouter()
   .merge(
     "user.",
     createRouter()
-
-
       .middleware(async ({ path, type, next, meta, ctx }) => {
         let authorized = true;
 
@@ -119,14 +117,14 @@ export const appRouter = createRouter()
         return next();
       })
 
-      // Username
+      // ~Username~
       .query("username", {
         resolve: async ({ ctx }) => {
           return ctx.user?.username;
         },
       })
 
-      // Flags
+      // ~Flags~
       .query("flags", {
         resolve: async ({ ctx }) => {
           return ctx.user?.flags;
