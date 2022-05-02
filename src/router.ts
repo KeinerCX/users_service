@@ -47,7 +47,9 @@ export const appRouter = createRouter()
             username,
             email,
             password: await argon2.hash(password, { type: argon2.argon2id }),
-            id: `${new Snowflake().idFromTimestamp(CustomEpoch || new Date().getMilliseconds())}`,
+            id: `${new Snowflake().idFromTimestamp(
+              CustomEpoch || new Date().getMilliseconds()
+            )}`,
             flags: ["user"],
           },
         });
@@ -97,67 +99,109 @@ export const appRouter = createRouter()
       return Util.CreateSession(user.id, ctx.ip!);
     },
   })
+  .mutation("logout", {
+    resolve: async ({ ctx }) => {
+      return prisma.user.update({
+        where: { id: ctx.user?.id },
+        data: {
+          sessions: {
+            delete: {
+              session_id: ctx.session?.session_id,
+            },
+          },
+        },
+      });
+    },
+  })
   .merge(
     "user.",
     createRouter()
       .middleware(async ({ path, type, next, meta, ctx }) => {
-        let authorized = true;
+        let logged_in = false;
 
-        if (meta?.auth.userFlags) {
-          if (ctx.user) {
-            for (const flag of meta?.auth.userFlags) if (!ctx.user.flags.includes(flag)) authorized = false;
-          } else {
-            authorized = false;
-          }
-        }
+        if (ctx.user) logged_in = true;
 
-        if (meta?.auth.verifyIP && ctx.ip !== ctx.token?.client_ip) authorized = false;
-
-        if (!authorized) throw new TRPCError({ code: "UNAUTHORIZED" });
+        if (!logged_in) throw new TRPCError({ code: "UNAUTHORIZED" });
         return next();
       })
 
       // ~Username~
-      .query("username", {
+      .query("info", {
+        input: z.string(),
+        resolve: async ({ ctx, input }) => {
+          let data = await prisma.user.findFirst({
+            where: {
+              id: input,
+            },
+          });
+
+          if (!data)
+            return {
+              ok: false,
+              data: {
+                error: "user_not_found",
+              },
+            };
+
+          return {
+            id: data.id,
+            username: data.username,
+            display_name: data.displayname,
+            avatar: data.avatar,
+            posts: data.posts,
+            flags: data.flags,
+          };
+        },
+      })
+
+      .query("me", {
         resolve: async ({ ctx }) => {
-          return ctx.user?.username;
+          return ctx.user;
         },
       })
 
       // ~Flags~
       .query("flags", {
-        input: z.object({ 
-          user_id: z.string().optional()
-        }),
-        resolve: async ({ ctx, input }) => {
-          return (await Util.GetQueryUser(ctx, input))?.flags;
+        resolve: async ({ ctx }) => {
+          return (await Util.GetQueryUser(ctx, ctx.user?.id!))?.flags;
         },
       })
+  )
+  .merge(
+    "admin.",
+    createRouter()
+      .middleware(({ next, ctx }) => {
+        if (ctx.user?.flags.includes("admin")) return next();
+
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      })
       .mutation("addFlags", {
-        meta: { auth: { userFlags: ["admin"] } },
-        input: z.object({ 
-          user_id: z.string().optional(),
-          flags: z.array( z.string() ) 
+        input: z.object({
+          user_id: z.string(),
+          flags: z.array(z.string()),
         }),
         resolve: async ({ ctx, input }) => {
-          return await prisma.user.update({ 
-            where: { id: (await Util.GetQueryUser(ctx, input))?.id },
-            data: { flags: { push: input.flags.filter(f => Flags.includes(f)) } }
+          return await prisma.user.update({
+            where: { id: (await Util.GetQueryUser(ctx, input.user_id))?.id },
+            data: {
+              flags: { push: input.flags.filter((f) => Flags.includes(f)) },
+            },
           });
         },
       })
       .mutation("removeFlags", {
-        meta: { auth: { userFlags: ["admin"] } },
-        input: z.object({ 
-          user_id: z.string().optional(),
-          flags: z.array( z.string() ) 
+        input: z.object({
+          user_id: z.string(),
+          flags: z.array(z.string()),
         }),
         resolve: async ({ ctx, input }) => {
-          return await prisma.user.update({ 
-            where: { id: (await Util.GetQueryUser(ctx, input))?.id },
-            data: { flags: { 
-              set: ctx.user?.flags.filter(f => !(input.flags.includes(f))) 
-            }}
+          return await prisma.user.update({
+            where: { id: (await Util.GetQueryUser(ctx, input.user_id))?.id },
+            data: {
+              flags: {
+                set: ctx.user?.flags.filter((f) => !input.flags.includes(f)),
+              },
+            },
           });
         },
       })

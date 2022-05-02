@@ -8,8 +8,7 @@ import { prisma } from "./prisma";
 
 namespace Util {
   export async function CreateSession(user_id: string, client_ip: string) {
-    if (!process.env.PRIVATE_KEY)
-      throw new Error("invalid_env_PRIVATE_KEY");
+    if (!process.env.PRIVATE_KEY) throw new Error("invalid_env_PRIVATE_KEY");
 
     let session = await prisma.session.create({
       data: {
@@ -44,12 +43,14 @@ namespace Util {
     return token;
   }
 
-  export async function GetQueryUser (ctx: { user: ISafeUser | null }, input: { user_id?: string }) {
-    if (input.user_id) {
-      const quser = await prisma.user.findUnique({ where: { id: input.user_id } });
+  export async function GetQueryUser(
+    ctx: { user: ISafeUser | null },
+    input: string
+  ) {
+    if (input) {
+      const quser = await prisma.user.findUnique({ where: { id: input } });
       if (!quser) throw new TRPCError({ code: "BAD_REQUEST" });
       return quser;
-
     } else return ctx.user;
   }
 }

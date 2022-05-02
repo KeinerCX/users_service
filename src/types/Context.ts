@@ -3,7 +3,7 @@ import * as trpcNext from "@trpc/server/adapters/next";
 import * as jwt from "jsonwebtoken";
 import jwtDecode from "jwt-decode";
 import requestIp from "request-ip";
-import { User } from "@prisma/client";
+import { User, Session } from "@prisma/client";
 import ts, { NullLiteral } from "typescript";
 import { ISafeUser } from "./interfaces/ISafeUser";
 import { prisma } from "../utility/prisma";
@@ -29,31 +29,43 @@ export async function createContext(opts?: trpcNext.CreateNextContextOptions) {
       token: null,
     };
 
-  let token: IAuthToken = jwtDecode<IAuthToken>(
-    opts?.req.headers.authorization
-  );
+  let token = jwtDecode<IAuthToken>(opts?.req.headers.authorization);
 
-  async function getUserFromHeader(): Promise<ISafeUser | null> {
+  async function getUserFromHeader(): Promise<{
+    user: ISafeUser | null;
+    session: Session | null;
+  }> {
     if (opts?.req.headers.authorization) {
-      // const user = await decodeJwtToken(req.headers.authorization.split(' ')[1])
-      let tmp = await prisma.user.findFirst({
+      let tmpUser = await prisma.user.findFirst({
         where: {
-          id: token.user_id,
+          sessions: {
+            every: {
+              session_id: token.session_id,
+            },
+          },
+        },
+        include: {
+          sessions: true,
         },
       });
+      if (!tmpUser) return { user: null, session: null };
 
-      return tmp;
+      let session = tmpUser.sessions.find(
+        (s) => s.session_id === token.session_id
+      );
+
+      return { user: tmpUser, session: session || null };
     }
 
-    return null;
+    return { user: null, session: null };
   }
 
-  const user = await getUserFromHeader();
+  const { user, session } = await getUserFromHeader();
 
   return {
     user,
     ip,
-    token,
+    session,
   };
 }
 
