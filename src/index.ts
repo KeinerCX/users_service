@@ -3,6 +3,8 @@ import { config } from "dotenv";
 import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
 import { appRouter } from "./router";
 import { createContext } from "./types/Context";
+
+//enitiaize the cunfigoratiun fwom .env
 config();
 
 const server = fastify({
