@@ -2,7 +2,7 @@ import * as trpc from "@trpc/server";
 import { Snowflake } from "nodejs-snowflake";
 import validator from "validator";
 import { string, z } from "zod";
-import { PasswordRegex, UsernameRegex } from "./utility/regex";
+import { CustomEpoch, PasswordRegex, UsernameRegex } from "./utility/regex";
 import { Context, createRouter } from "./types/Context";
 import Util from "./utility/services";
 import * as argon2 from "argon2";
@@ -47,7 +47,7 @@ export const appRouter = createRouter()
             username,
             email,
             password: await argon2.hash(password, { type: argon2.argon2id }),
-            id: new Snowflake().getUniqueID().toString(),
+            id: `${new Snowflake().idFromTimestamp(CustomEpoch || new Date().getMilliseconds())}`,
             flags: ["user"],
           },
         });
@@ -126,26 +126,35 @@ export const appRouter = createRouter()
 
       // ~Flags~
       .query("flags", {
-        resolve: async ({ ctx }) => {
-          return ctx.user?.flags;
+        input: z.object({ 
+          user_id: z.string().optional()
+        }),
+        resolve: async ({ ctx, input }) => {
+          return (await Util.GetQueryUser(ctx, input))?.flags;
         },
       })
       .mutation("addFlags", {
         meta: { auth: { userFlags: ["admin"] } },
-        input: z.object({ flags: z.array( z.string() ) }),
+        input: z.object({ 
+          user_id: z.string().optional(),
+          flags: z.array( z.string() ) 
+        }),
         resolve: async ({ ctx, input }) => {
           return await prisma.user.update({ 
-            where: { id: ctx.user?.id },
+            where: { id: (await Util.GetQueryUser(ctx, input))?.id },
             data: { flags: { push: input.flags.filter(f => Flags.includes(f)) } }
           });
         },
       })
       .mutation("removeFlags", {
         meta: { auth: { userFlags: ["admin"] } },
-        input: z.object({ flags: z.array( z.string() ) }),
+        input: z.object({ 
+          user_id: z.string().optional(),
+          flags: z.array( z.string() ) 
+        }),
         resolve: async ({ ctx, input }) => {
           return await prisma.user.update({ 
-            where: { id: ctx.user?.id },
+            where: { id: (await Util.GetQueryUser(ctx, input))?.id },
             data: { flags: { 
               set: ctx.user?.flags.filter(f => !(input.flags.includes(f))) 
             }}

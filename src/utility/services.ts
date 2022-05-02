@@ -1,7 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, User } from "@prisma/client";
+import { TRPCError } from "@trpc/server";
 import * as date from "date-and-time";
 import { FastifyReply } from "fastify";
 import * as jwt from "jsonwebtoken";
+import { ISafeUser } from "../types/interfaces/ISafeUser";
 import { prisma } from "./prisma";
 
 namespace Util {
@@ -40,6 +42,15 @@ namespace Util {
     );
 
     return token;
+  }
+
+  export async function GetQueryUser (ctx: { user: ISafeUser | null }, input: { user_id?: string }) {
+    if (input.user_id) {
+      const quser = await prisma.user.findUnique({ where: { id: input.user_id } });
+      if (!quser) throw new TRPCError({ code: "BAD_REQUEST" });
+      return quser;
+
+    } else return ctx.user;
   }
 }
 
