@@ -101,16 +101,31 @@ export const appRouter = createRouter()
   })
   .mutation("logout", {
     resolve: async ({ ctx }) => {
-      return prisma.user.update({
-        where: { id: ctx.user?.id },
-        data: {
-          sessions: {
-            delete: {
-              session_id: ctx.session?.session_id,
+      try {
+        prisma.user.update({
+          where: { id: ctx.user?.id },
+          data: {
+            sessions: {
+              delete: {
+                session_id: ctx.session?.session_id,
+              },
             },
           },
-        },
-      });
+        });
+        return;
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError) {
+          if (e.code === "P2001") {
+            return {
+              ok: false,
+              data: {
+                error: "record_not_found",
+              },
+            };
+          }
+        }
+        throw e;
+      }
     },
   })
   .merge(
